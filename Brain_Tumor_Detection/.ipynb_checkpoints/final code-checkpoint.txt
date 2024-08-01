@@ -1,0 +1,236 @@
+import cv2
+import os
+from PIL import Image
+import numpy as np
+import tensorflow as tf
+from tensorflow import keras
+from keras.models import Sequential
+from keras.layers import Conv2D, MaxPooling2D
+from keras.layers import Activation, Dropout, Flatten, Dense
+from keras.utils import normalize
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import f1_score
+from sklearn.metrics import confusion_matrix
+from sklearn.utils import shuffle
+from keras.utils import to_categorical
+from os import listdir
+import matplotlib.pyplot as plt
+%matplotlib inline
+import random
+from sklearn.metrics import classification_report
+from sklearn.metrics import accuracy_score
+
+Tumor="C:\\Users\\ARUN\\OneDrive\\Desktop\\ALL FOLDER\\PROJECT\\Brain_Tumor_Detection\\Img\\Yes"
+No_Tumor="C:\\Users\\ARUN\\OneDrive\\Desktop\\ALL FOLDER\\PROJECT\\Brain_Tumor_Detection\\Img\\No"
+label=[]
+dataset=[]
+input_size=128
+
+Tumor_file_names = os.listdir(Tumor)
+for i, image_name in enumerate(Tumor_file_names):
+    image_path = os.path.join(Tumor,image_name)
+    image=cv2.imread(image_path)
+    image=Image.fromarray(image,'RGB')
+    image=image.resize((input_size, input_size))
+    dataset.append(np.array(image))
+    label.append(0)
+
+No_Tumor_file_names = os.listdir(No_Tumor)
+for i, image_name in enumerate(No_Tumor_file_names):
+    image_path = os.path.join(No_Tumor,image_name)
+    image=cv2.imread(image_path)
+    image=Image.fromarray(image,'RGB')
+    image=image.resize((input_size, input_size))
+    dataset.append(np.array(image))
+    label.append(1)
+
+dataset=np.array(dataset)
+label=np.array(label)
+
+x_train, x_test, y_train, y_test = train_test_split(dataset, label, test_size=0.2, random_state=0)
+
+y_train=y_train.reshape(len(y_train),1)
+y_test=y_test.reshape(len(y_test),1)
+
+print(x_train.shape)
+print(y_train.shape)
+print(x_test.shape)
+print(y_test.shape)
+
+x_train=x_train/255.0
+x_test=x_test/255.5
+
+model=Sequential()
+model.add(Conv2D(16,(3,3), activation='relu', input_shape=(128,128,3)))
+model.add(MaxPooling2D((2,2)))
+
+model.add(Conv2D(32,(3,3), activation='relu'))
+model.add(MaxPooling2D(2,2))
+
+model.add(Conv2D(64,(3,3), activation='relu'))
+model.add(MaxPooling2D(2,2))
+
+model.add(Conv2D(128,(3,3), activation='relu'))
+model.add(MaxPooling2D(2,2))
+
+model.add(Flatten())
+model.add(Dense(64,activation='relu'))
+model.add(Dense(1, activation='sigmoid'))
+
+model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+
+model.fit(x_train,y_train, epochs=20, batch_size=64)
+
+model.evaluate(x_test,y_test)
+
+from keras.models import load_model
+
+model.save('BrainToumorDetection.h5')
+
+#Now the work of python GUI
+
+import cv2
+from PIL import Image
+from keras.models import load_model
+from keras.preprocessing import image as keras_image
+import matplotlib.pyplot as plt
+%matplotlib inline
+import pygame
+import tkinter as tk
+from tkinter import Label, filedialog, Toplevel  # Importing filedialog module
+from PIL import Image, ImageTk
+
+def detectTumor(path):  # Added parentheses after function name and colon at the end
+    # Load the model
+    model = load_model('BrainToumorDetection.h5')
+
+    # Read the image
+    image_path = path
+    image = cv2.imread(image_path)
+
+    # Convert the image to PIL format
+    img = Image.fromarray(image)
+
+    # Resize the image
+    img_resized = img.resize((128, 128))
+
+    # Convert the image to a NumPy array
+    img_array = keras_image.img_to_array(img_resized)
+
+    # Reshape the image array
+    img_array = img_array.reshape(1, 128, 128, 3)
+
+    # Predict using the model
+    y_pred = model.predict(img_array)
+
+    return y_pred
+import tkinter as tk
+from tkinter import filedialog, Toplevel
+from PIL import Image, ImageTk, ImageSequence
+import pygame
+
+root = tk.Tk()
+root.title("Brain tumor detection")
+images_list = []
+gif_duration = ''
+images_counting = -1
+slider_lb = None  # Declare slider_lb as a global variable
+
+def extract_images(path):
+    global gif_duration
+    images_list.clear()
+
+    gif = Image.open(path)
+
+    for frame in ImageSequence.Iterator(gif):
+        images_list.append(ImageTk.PhotoImage(frame.convert("RGBA")))  # Convert to RGBA for transparency
+
+    gif_duration = gif.info.get("duration", 100)  # Default duration of 100 ms if not specified
+
+def play_slider(label):
+    global images_counting
+    try:
+        images_counting += 1
+        label.config(image=images_list[images_counting])
+        root.after(gif_duration, play_slider, label)
+    except IndexError:
+        images_counting = -1
+        root.after(gif_duration, play_slider, label)
+
+def open_file():
+    path = filedialog.askopenfilename(title="Select an image", filetypes=(("Image files", "*.jpg;*.jpeg;*.png"), ("All files", "*.*")))
+    pygame.mixer.init()
+    pygame.mixer.music.load("C:\\Users\\ARUN\\Downloads\\Please note that you.mp3")
+    pygame.mixer.music.play()
+    if path:
+        result = detectTumor(path)
+        if result < 0.5:
+            brainTumorDetect()
+        else:
+            brainTumorNotDetect()
+
+def brainTumorDetect():
+    global slider_lb  # Declare slider_lb as global
+    brainTumor = Toplevel()
+    brainTumor.state('zoomed')  # Maximize the window
+    brainTumor.title("Result")
+    brainTumor.config(bg="black")
+    
+    pygame.mixer.init()
+    pygame.mixer.music.load("C:\\Users\\ARUN\\Downloads\\tumor.mp3")
+    pygame.mixer.music.play()
+    slider_lb = tk.Label(brainTumor, bg="black")  # Set the background color to white
+    slider_lb.pack(fill=tk.BOTH, expand=True)
+
+    # Extract and display first GIF frames
+    extract_images("C:\\Users\\ARUN\\Downloads\\sad.gif")
+    play_slider(slider_lb)
+    message_label = tk.Label(brainTumor, text="Brain Tumor Detected", font=("Arial", 24), bg="White")
+    message_label.pack(padx=10, pady=10)  # Set padx and pady to 0 for no padding
+    message_label.place(x=610,y=90)
+    
+    
+def brainTumorNotDetect():
+    notbrainTumor = Toplevel()
+    notbrainTumor.state('zoomed')  # Maximize the window
+    notbrainTumor.title("Result")
+    notbrainTumor.config(bg="black")
+    pygame.mixer.init()
+    pygame.mixer.music.load("C:\\Users\\ARUN\\Downloads\\nontumor.mp3")
+    pygame.mixer.music.play()
+    
+    slider_lb = tk.Label(notbrainTumor, bg="black")  # Set the background color to white
+    slider_lb.pack(fill=tk.BOTH, expand=True)
+    
+    # Extract and display first GIF frames
+    extract_images("C:\\Users\\ARUN\\Downloads\\happy-dance.gif")
+    play_slider(slider_lb)
+    
+    message_label = tk.Label(notbrainTumor, text="Brain Tumor not Detected", font=("Arial", 24), bg="White")
+    message_label.pack(padx=20, pady=20)
+    message_label.place(x=580,y=210)
+
+screen_width = root.winfo_screenwidth()
+screen_height = root.winfo_screenheight()
+root.state('zoomed')  # Maximize the window
+#root.geometry(f"{screen_width}x{screen_height}+0+0")
+
+# Load the edited image
+img = Image.open("C:/Users/ARUN/Downloads/law.png")
+
+# Convert the image to a PhotoImage object
+pimage = ImageTk.PhotoImage(img)
+
+# Create a label with the image
+l1 = Label(root, image=pimage)
+
+# Set the position of the label
+l1.place(x=-200, y=-130)
+
+text_label = tk.Label(root, text="Choose Image", font=("Arial", 24), bg="White")
+text_label.place(relx=0.5, rely=0.5, anchor="center")
+btn_open = tk.Button(root, text="Open Image", command=open_file)
+btn_open.pack(pady=10)
+btn_open.place(x=730, y=430)
+root.mainloop()
+
